@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FastAPI + MariaDB Glassmorphism Todo Dashboard</title>
+    <!-- Outfit Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header>
+            <div>
+                <h1>Todo Dashboard</h1>
+                <p style="color: var(--text-secondary); margin: 0.2rem 0 0 0; font-size: 0.9rem;">
+                    FastAPI + SQLAlchemy + MariaDB comparison project
+                </p>
+            </div>
+            <span class="badge badge-python">Python Backend</span>
+        </header>
+
+        <!-- Feedback Banner -->
+        <div id="feedbackBanner" class="feedback-banner"></div>
+
+        <div class="grid-2">
+            <!-- Left Column: Actions & Config -->
+            <div>
+                <!-- Security Token Configuration -->
+                <div class="card">
+                    <h3 class="section-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: middle;">
+                          <path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+                        </svg>
+                        Security & Persona Selector
+                    </h3>
+                    <div class="form-group">
+                        <label for="tokenSelector">Select Role Persona (Bearer Token)</label>
+                        <select id="tokenSelector" onchange="onTokenChange()">
+                            <option value="admin-token" selected>Admin Persona (admin-token) - CRUD Access</option>
+                            <option value="user-token">User Persona (user-token) - Read Only</option>
+                            <option value="invalid-token">Anonymous / Invalid Token - No Access</option>
+                        </select>
+                    </div>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0.5rem 0 0 0; line-height: 1.4;">
+                        FastAPI uses <code>security.py</code> (similar to Spring Security) to extract the Bearer token, verify roles, and enforce Method Security equivalent rules.
+                    </p>
+                </div>
+
+                <!-- Create Todo Form -->
+                <div class="card">
+                    <h3 class="section-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: middle;">
+                          <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+                        </svg>
+                        Create New Todo
+                    </h3>
+                    <form id="createTodoForm" onsubmit="handleCreateTodo(event)">
+                        <div class="form-group">
+                            <label for="todoTitle">Title</label>
+                            <input type="text" id="todoTitle" placeholder="e.g. Implement Spring comparison controllers" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="todoDesc">Description (Optional)</label>
+                            <textarea id="todoDesc" rows="3" placeholder="Describe the task details..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            Create Todo Item
+                        </button>
+                    </form>
+                    <div style="margin-top: 0.8rem;">
+                        <button onclick="triggerRollbackScenario()" class="btn btn-secondary" style="font-size: 0.85rem; padding: 0.5rem;">
+                            Test Force-Rollback (Transactional Audit Log)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Diagnostics & Actuators -->
+                <div class="card">
+                    <h3 class="section-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: middle;">
+                          <path d="M6 1v3H3v2h3v3h2V6h3V4H8V1H6z"/>
+                          <path d="M4.5 12a.5.5 0 0 1-.5-.5v-2a.5.5 0 0 1 1 0v2a.5.5 0 0 1-.5.5zm3 0a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 1 0v4a.5.5 0 0 1-.5.5zm3 0a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 1 0v3a.5.5 0 0 1-.5.5z"/>
+                        </svg>
+                        Diagnostics & Actuators
+                    </h3>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Equivalent to Spring Boot Actuator endpoint metrics for monitoring application health, thread states, and system limits.
+                    </p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <button onclick="checkHealth()" class="btn btn-secondary" style="font-size: 0.85rem; padding: 0.6rem 0.5rem;">
+                            Health Check
+                        </button>
+                        <a href="/api/debug/threaddump" target="_blank" class="btn btn-secondary" style="font-size: 0.85rem; padding: 0.6rem 0.5rem; text-decoration: none;">
+                            Thread Dump
+                        </a>
+                    </div>
+                    <button onclick="triggerOOM()" class="btn btn-danger" style="font-size: 0.85rem; padding: 0.6rem 0.5rem;">
+                        Trigger OutOfMemory (OOM) Crash
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Column: Todos & Logs -->
+            <div>
+                <!-- Todo Items List -->
+                <div class="card">
+                    <h3 class="section-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: middle;">
+                          <path d="M12.354 4.354a.5.5 0 0 0-.708-.708L5 10.293 1.854 7.146a.5.5 0 1 0-.708.708l3.5 3.5a.5.5 0 0 0 .708 0l7-7zm-4.208 7-.708-.708L5 13.293l-1.854-1.853a.5.5 0 0 0-.708.708l2.5 2.5a.5.5 0 0 0 .708 0l2.5-2.5z"/>
+                        </svg>
+                        Tasks List
+                    </h3>
+                    <ul class="todo-list" id="todoList">
+                        <!-- Loaded dynamically or rendered by Jinja server-side -->
+                        {% for todo in todos %}
+                        <li class="todo-item" id="todo-{{ todo.id }}">
+                            <div class="todo-content">
+                                <p class="todo-title {% if todo.completed %}completed{% endif %}">
+                                    <span>{{ todo.title }}</span>
+                                </p>
+                                {% if todo.description %}
+                                <p class="todo-desc">{{ todo.description }}</p>
+                                {% endif %}
+                            </div>
+                            <div class="todo-actions">
+                                <button class="btn-icon btn-icon-check" onclick="toggleTodo({{ todo.id }})" title="Toggle Complete">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                      <path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/>
+                                    </svg>
+                                </button>
+                                <button class="btn-icon btn-icon-delete" onclick="deleteTodo({{ todo.id }})" title="Delete Task">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                      <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                      <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+
+                <!-- Transaction Audit Logs -->
+                <div class="card">
+                    <h3 class="section-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: middle;">
+                          <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                          <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                        </svg>
+                        Transactional Audit Logs
+                    </h3>
+                    <div id="logViewer" class="log-viewer">
+                        <p style="color: var(--text-secondary); text-align: center; margin-top: 2rem;">
+                            No logs loaded. Verify your auth permissions to see system audits.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript logic -->
+    <script>
+        // Retrieve or initialize active token selection
+        let activeToken = localStorage.getItem("activeToken") || "admin-token";
+        document.getElementById("tokenSelector").value = activeToken;
+
+        // Auto load audit logs on page load
+        window.addEventListener("DOMContentLoaded", () => {
+            loadAuditLogs();
+        });
+
+        // Show feedback banners
+        function showFeedback(message, isError = false) {
+            const banner = document.getElementById("feedbackBanner");
+            banner.textContent = message;
+            banner.className = `feedback-banner ${isError ? 'feedback-error' : 'feedback-success'}`;
+            banner.style.display = "block";
+            setTimeout(() => {
+                banner.style.display = "none";
+            }, 6000);
+        }
+
+        // On selection change
+        function onTokenChange() {
+            const selector = document.getElementById("tokenSelector");
+            activeToken = selector.value;
+            localStorage.setItem("activeToken", activeToken);
+            showFeedback(`Role persona changed. Active token: ${activeToken}`);
+            loadTodos();
+            loadAuditLogs();
+        }
+
+        // Fetch wrapper incorporating Bearer Authentication
+        async function apiRequest(url, method = "GET", body = null) {
+            const headers = {};
+            if (activeToken && activeToken !== "invalid-token") {
+                headers["Authorization"] = `Bearer ${activeToken}`;
+            } else if (activeToken === "invalid-token") {
+                headers["Authorization"] = "Bearer wrong-or-expired-token";
+            }
+
+            if (body) {
+                headers["Content-Type"] = "application/json";
+            }
+
+            const options = {
+                method,
+                headers,
+            };
+
+            if (body) {
+                options.body = JSON.stringify(body);
+            }
+
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                let errorMsg = `API Error ${response.status}: `;
+                try {
+                    const data = await response.json();
+                    errorMsg += data.detail || response.statusText;
+                } catch {
+                    errorMsg += response.statusText;
+                }
+                throw new Error(errorMsg);
+            }
+
+            if (response.status === 204) {
+                return null;
+            }
+            return await response.json();
+        }
+
+        // Load all Todos (re-renders the right column dynamically)
+        async function loadTodos() {
+            try {
+                const todos = await apiRequest("/api/todos");
+                const todoList = document.getElementById("todoList");
+                todoList.innerHTML = "";
+                
+                if (todos.length === 0) {
+                    todoList.innerHTML = `<li style="text-align: center; padding: 2rem; color: var(--text-secondary);">No tasks created yet.</li>`;
+                    return;
+                }
+
+                todos.forEach(todo => {
+                    const li = document.createElement("li");
+                    li.className = "todo-item";
+                    li.id = `todo-${todo.id}`;
+                    li.innerHTML = `
+                        <div class="todo-content">
+                            <p class="todo-title ${todo.completed ? 'completed' : ''}">
+                                <span>${todo.title}</span>
+                            </p>
+                            ${todo.description ? `<p class="todo-desc">${todo.description}</p>` : ''}
+                        </div>
+                        <div class="todo-actions">
+                            <button class="btn-icon btn-icon-check" onclick="toggleTodo(${todo.id})" title="Toggle Complete">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                  <path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/>
+                                </svg>
+                            </button>
+                            <button class="btn-icon btn-icon-delete" onclick="deleteTodo(${todo.id})" title="Delete Task">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                  <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                  <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    `;
+                    todoList.appendChild(li);
+                });
+            } catch (err) {
+                console.error(err);
+                document.getElementById("todoList").innerHTML = `
+                    <li style="text-align: center; padding: 2rem; color: var(--accent-red); border: 1px dashed rgba(248, 113, 113, 0.3); border-radius: 12px;">
+                        Access Denied: Please select a role persona with read access (Admin or User).
+                    </li>
+                `;
+            }
+        }
+
+        // Load audit logs
+        async function loadAuditLogs() {
+            const viewer = document.getElementById("logViewer");
+            try {
+                const logs = await apiRequest("/api/todos/logs");
+                viewer.innerHTML = "";
+                if (logs.length === 0) {
+                    viewer.innerHTML = `<p style="color: var(--text-secondary); text-align: center; margin-top: 2rem;">No logs found.</p>`;
+                    return;
+                }
+
+                logs.forEach(log => {
+                    const div = document.createElement("div");
+                    div.className = "log-entry";
+                    
+                    const time = new Date(log.created_at).toLocaleTimeString();
+                    div.innerHTML = `
+                        <span style="color: var(--text-secondary); margin-right: 0.5rem;">[${time}]</span>
+                        <span class="log-action action-${log.action}">${log.action}</span>
+                        <span style="color: var(--text-primary);">Todo ID: ${log.todo_id} - ${log.details || ''}</span>
+                    `;
+                    viewer.appendChild(div);
+                });
+            } catch (err) {
+                console.warn(err);
+                viewer.innerHTML = `
+                    <p style="color: var(--accent-red); text-align: center; margin-top: 1rem; font-size: 0.85rem;">
+                        Authentication required to view system logs. Please select the Admin Persona.
+                    </p>
+                `;
+            }
+        }
+
+        // Create Todo handler
+        async function handleCreateTodo(event) {
+            event.preventDefault();
+            const titleInput = document.getElementById("todoTitle");
+            const descInput = document.getElementById("todoDesc");
+
+            try {
+                await apiRequest("/api/todos", "POST", {
+                    title: titleInput.value,
+                    description: descInput.value || null
+                });
+                showFeedback("Todo created successfully!");
+                titleInput.value = "";
+                descInput.value = "";
+                loadTodos();
+                loadAuditLogs();
+            } catch (err) {
+                showFeedback(err.message, true);
+            }
+        }
+
+        // Toggle status
+        async function toggleTodo(id) {
+            try {
+                await apiRequest(`/api/todos/${id}/toggle`, "PUT");
+                showFeedback("Task status toggled!");
+                loadTodos();
+                loadAuditLogs();
+            } catch (err) {
+                showFeedback(err.message, true);
+            }
+        }
+
+        // Delete todo
+        async function deleteTodo(id) {
+            if (!confirm("Are you sure you want to delete this task?")) return;
+            try {
+                await apiRequest(`/api/todos/${id}`, "DELETE");
+                showFeedback("Task deleted permanently!");
+                loadTodos();
+                loadAuditLogs();
+            } catch (err) {
+                showFeedback(err.message, true);
+            }
+        }
+
+        // Rollback simulation scenario
+        async function triggerRollbackScenario() {
+            try {
+                await apiRequest("/api/todos", "POST", {
+                    title: "force-rollback",
+                    description: "This title forces an exception in the backend transaction service to rollback the record."
+                });
+            } catch (err) {
+                showFeedback("Transaction Rollback Tested! " + err.message, false);
+                loadTodos();
+                loadAuditLogs();
+            }
+        }
+
+        // Actuator health check
+        async function checkHealth() {
+            try {
+                const response = await fetch("/api/debug/health");
+                const data = await response.json();
+                showFeedback(`Health Check: DB=${data.details?.database || 'DOWN'}, status=${data.status}`);
+            } catch (err) {
+                showFeedback("Health Check request failed", true);
+            }
+        }
+
+        // Trigger memory leak / OOM
+        function triggerOOM() {
+            if (confirm("WARNING: This will consume all server memory and cause the Python process to crash or get terminated by the OS. Continue?")) {
+                showFeedback("Triggering OutOfMemory (OOM)... Server should crash momentarily.", true);
+                fetch("/api/debug/oom").catch(err => {
+                    showFeedback("Server is down. OOM Triggered successfully!", true);
+                });
+            }
+        }
+    </script>
+</body>
+</html>

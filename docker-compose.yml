@@ -1,0 +1,17 @@
+services:
+  mariadb:
+    image: mariadb:10.11
+    container_name: local-mariadb
+    ports:
+      - "3406:3306"
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpassword
+      MARIADB_DATABASE: tododb
+      MARIADB_USER: todouser
+      MARIADB_PASSWORD: todopassword
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    restart: unless-stopped
+
+volumes:
+  mariadb_data:

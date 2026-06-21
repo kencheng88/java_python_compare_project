@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Spring Boot Todo Dashboard</title>
+    <link rel="stylesheet" th:href="@{/style.css}">
+</head>
+<body>
+    <div class="container">
+        <!-- Title & Diagnostics Header (Full Width) -->
+        <div class="card full-width">
+            <h1>Spring Boot Todo Dashboard (Java 21)</h1>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 1.5rem;">
+                Comparing Spring Boot's declarative Security & Transactions with Python's FastAPI.
+            </p>
+            
+            <div id="alertBox" class="alert" style="display: none;"></div>
+
+            <div class="diagnostics-bar">
+                <div class="diag-pill">Status: <span id="sysStatus" style="color: var(--success-color)">Healthy</span></div>
+                <div class="diag-pill">Free Memory: <span id="freeMem">-- MB</span></div>
+                <div class="diag-pill">Allocated Memory: <span id="allocMem">-- MB</span></div>
+                <div class="diag-pill">Max Memory: <span id="maxMem">-- MB</span></div>
+                <div class="diag-pill">Used Memory: <span id="usedMem">-- MB</span></div>
+                <button class="btn btn-secondary" onclick="fetchMemoryStats()" style="padding: 0.3rem 0.8rem; font-size: 0.8rem;">Refresh Stats</button>
+            </div>
+            
+            <!-- Personnel Selector & Diagnostic Triggers -->
+            <div style="display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: space-between; align-items: center; border-top: 1px solid var(--glass-border); padding-top: 1.5rem;">
+                <div class="form-group" style="margin-bottom: 0; display: flex; align-items: center; gap: 0.8rem;">
+                    <label style="margin-bottom: 0; white-space: nowrap;"><strong>Active Token:</strong></label>
+                    <select id="tokenSelector" onchange="changeToken()" style="width: 200px;">
+                        <option value="" th:selected="${activeToken == ''}">None (Anonymous)</option>
+                        <option value="user-token" th:selected="${activeToken == 'user-token'}">User (user-token)</option>
+                        <option value="admin-token" th:selected="${activeToken == 'admin-token'}">Admin (admin-token)</option>
+                    </select>
+                </div>
+                
+                <div style="display: flex; gap: 1rem;">
+                    <button class="btn btn-warning" onclick="triggerOom()">Simulate OOM (Heap Exhaustion)</button>
+                    <a href="/swagger-ui.html" target="_blank" class="btn btn-secondary">Open Swagger UI</a>
+                    <a href="/v3/api-docs/mcp" target="_blank" class="btn btn-secondary">MCP OpenAPI Spec</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Left Column: Todo Form & List -->
+        <div class="card">
+            <h2>Manage Tasks</h2>
+            
+            <form id="todoForm" onsubmit="submitTodo(event)" style="margin-bottom: 2rem;">
+                <input type="hidden" id="todoId" value="">
+                <div class="form-group">
+                    <label for="title">Title</label>
+                    <input type="text" id="title" required placeholder="Enter task title (use 'force-rollback' to test rollback)">
+                </div>
+                <div class="form-group">
+                    <label for="description">Description</label>
+                    <textarea id="description" placeholder="Enter task description..."></textarea>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="completed">
+                    <label for="completed">Mark as Completed</label>
+                </div>
+                <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem;">
+                    <button type="submit" class="btn btn-primary" id="submitBtn">Create Task</button>
+                    <button type="button" class="btn btn-secondary" onclick="resetForm()" id="cancelBtn" style="display: none;">Cancel</button>
+                </div>
+            </form>
+
+            <h2>Tasks List</h2>
+            <ul class="todo-list" id="todoList">
+                <!-- Will be populated dynamically via AJAX. Falling back to Thymeleaf pre-render if JS is slow. -->
+                <li th:each="todo : ${todos}" th:class="'todo-item ' + (${todo.completed} ? 'completed' : 'pending')" th:id="'todo-' + ${todo.id}">
+                    <div class="todo-content">
+                        <h3 th:text="${todo.title}">Todo Title</h3>
+                        <p th:text="${todo.description}">Todo Description</p>
+                        <small style="color: var(--text-secondary)">Created: <span th:text="${#temporals.format(todo.createdAt, 'yyyy-MM-dd HH:mm:ss')}"></span></small>
+                    </div>
+                    <div class="todo-actions">
+                        <button class="btn btn-secondary" th:onclick="'editTodo(' + ${todo.id} + ', \'' + ${todo.title} + '\', \'' + ${todo.description} + '\', ' + ${todo.completed} + ')'">Edit</button>
+                        <button class="btn btn-primary" th:if="${!todo.completed}" th:onclick="'toggleComplete(' + ${todo.id} + ', \'' + ${todo.title} + '\', \'' + ${todo.description} + '\', true)'">Complete</button>
+                        <button class="btn btn-secondary" th:if="${todo.completed}" th:onclick="'toggleComplete(' + ${todo.id} + ', \'' + ${todo.title} + '\', \'' + ${todo.description} + '\', false)'">Reopen</button>
+                        <button class="btn btn-danger" th:onclick="'deleteTodo(' + ${todo.id} + ')'">Delete</button>
+                    </div>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Right Column: Audit Logs & System logs -->
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2>System Mutation Logs</h2>
+                <button class="btn btn-danger" onclick="clearLogs()" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Clear Logs</button>
+            </div>
+            
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                These logs are persisted in <code>todo_logs</code> in the database. Transactions protect both the task and log writing.
+            </p>
+            
+            <div class="log-container" id="logContainer">
+                <div th:each="log : ${logs}" class="log-entry">
+                    [<span class="log-timestamp" th:text="${#temporals.format(log.timestamp, 'HH:mm:ss')}">12:00:00</span>] 
+                    <span th:class="'log-action ' + ${log.action}" th:text="${log.action}">ACTION</span>
+                    <span th:text="${log.details}">Details...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentToken = document.getElementById('tokenSelector').value;
+
+        // Automatically fetch stats on load
+        window.onload = function() {
+            fetchMemoryStats();
+            // Optional: poll memory stats every 10 seconds
+            setInterval(fetchMemoryStats, 10000);
+        };
+
+        function changeToken() {
+            currentToken = document.getElementById('tokenSelector').value;
+            showAlert('Token changed to: ' + (currentToken ? currentToken : 'Anonymous'), 'success');
+            // Refresh tables using the new token
+            refreshData();
+        }
+
+        function getHeaders() {
+            let headers = {
+                'Content-Type': 'application/json'
+            };
+            if (currentToken) {
+                headers['Authorization'] = 'Bearer ' + currentToken;
+            }
+            return headers;
+        }
+
+        function showAlert(message, type) {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.className = 'alert ' + (type === 'danger' ? 'alert-danger' : 'alert-success');
+            alertBox.innerText = message;
+            alertBox.style.display = 'block';
+            setTimeout(() => {
+                alertBox.style.display = 'none';
+            }, 6000);
+        }
+
+        async function fetchMemoryStats() {
+            try {
+                const response = await fetch('/api/debug/memory');
+                if (response.ok) {
+                    const stats = await response.json();
+                    document.getElementById('freeMem').innerText = stats.freeMemoryMb + ' MB';
+                    document.getElementById('allocMem').innerText = stats.allocatedMemoryMb + ' MB';
+                    document.getElementById('maxMem').innerText = stats.maxMemoryMb + ' MB';
+                    document.getElementById('usedMem').innerText = stats.usedMemoryMb + ' MB';
+                }
+            } catch (err) {
+                console.error("Failed to fetch memory stats", err);
+            }
+        }
+
+        async function triggerOom() {
+            if (confirm("Are you sure you want to exhaust the JVM heap? This will cause an OutOfMemoryError and might crash the app!")) {
+                try {
+                    const response = await fetch('/api/debug/oom');
+                    const text = await response.text();
+                    showAlert(text, 'danger');
+                    document.getElementById('sysStatus').innerText = 'Exhausting Heap...';
+                    document.getElementById('sysStatus').style.color = 'var(--danger-color)';
+                } catch (err) {
+                    showAlert("Failed to contact OOM trigger", 'danger');
+                }
+            }
+        }
+
+        async function refreshData() {
+            await Promise.all([refreshTodos(), refreshLogs()]);
+        }
+
+        async function refreshTodos() {
+            try {
+                const response = await fetch('/api/todos', { headers: getHeaders() });
+                if (response.status === 403 || response.status === 401) {
+                    document.getElementById('todoList').innerHTML = '<li class="todo-item" style="color: var(--danger-color)">Access Denied. Authenticate to view tasks.</li>';
+                    return;
+                }
+                const todos = await response.json();
+                const todoList = document.getElementById('todoList');
+                todoList.innerHTML = '';
+                todos.forEach(todo => {
+                    const statusClass = todo.completed ? 'completed' : 'pending';
+                    const completeBtn = todo.completed ? 
+                        `<button class="btn btn-secondary" onclick="toggleComplete(${todo.id}, '${todo.title}', '${todo.description}', false)">Reopen</button>` :
+                        `<button class="btn btn-primary" onclick="toggleComplete(${todo.id}, '${todo.title}', '${todo.description}', true)">Complete</button>`;
+                    
+                    todoList.innerHTML += `
+                        <li class="todo-item ${statusClass}" id="todo-${todo.id}">
+                            <div class="todo-content">
+                                <h3>${escapeHtml(todo.title)}</h3>
+                                <p>${escapeHtml(todo.description || '')}</p>
+                                <small style="color: var(--text-secondary)">ID: ${todo.id} | Created: ${formatDate(todo.createdAt)}</small>
+                            </div>
+                            <div class="todo-actions">
+                                <button class="btn btn-secondary" onclick="editTodo(${todo.id}, '${escapeQuote(todo.title)}', '${escapeQuote(todo.description || '')}', ${todo.completed})">Edit</button>
+                                ${completeBtn}
+                                <button class="btn btn-danger" onclick="deleteTodo(${todo.id})">Delete</button>
+                            </div>
+                        </li>
+                    `;
+                });
+            } catch (err) {
+                console.error("Error refreshing todos", err);
+            }
+        }
+
+        async function refreshLogs() {
+            try {
+                const response = await fetch('/api/logs', { headers: getHeaders() });
+                const logContainer = document.getElementById('logContainer');
+                if (response.status === 403 || response.status === 401) {
+                    logContainer.innerHTML = '<div style="color: var(--danger-color)">Access Denied. Admin credentials required to view mutation logs.</div>';
+                    return;
+                }
+                const logs = await response.json();
+                logContainer.innerHTML = '';
+                logs.forEach(log => {
+                    logContainer.innerHTML += `
+                        <div class="log-entry">
+                            [<span class="log-timestamp">${formatTime(log.timestamp)}</span>] 
+                            <span class="log-action ${log.action}">${log.action}</span>
+                            <span>${escapeHtml(log.details)}</span>
+                        </div>
+                    `;
+                });
+            } catch (err) {
+                console.error("Error refreshing logs", err);
+            }
+        }
+
+        async function submitTodo(e) {
+            e.preventDefault();
+            const id = document.getElementById('todoId').value;
+            const title = document.getElementById('title').value;
+            const description = document.getElementById('description').value;
+            const completed = document.getElementById('completed').checked;
+
+            const todoData = { title, description, completed };
+            const isEdit = !!id;
+            const url = isEdit ? `/api/todos/${id}` : '/api/todos';
+            const method = isEdit ? 'PUT' : 'POST';
+
+            try {
+                const response = await fetch(url, {
+                    method: method,
+                    headers: getHeaders(),
+                    body: JSON.stringify(todoData)
+                });
+
+                if (response.status === 403 || response.status === 401) {
+                    showAlert("Access Denied: You do not have permission to write tasks.", 'danger');
+                    return;
+                }
+
+                const result = await response.text();
+
+                if (response.ok) {
+                    showAlert(isEdit ? "Task updated successfully!" : "Task created successfully!", "success");
+                    resetForm();
+                    refreshData();
+                } else {
+                    // Check if it's the force-rollback case
+                    if (title.toLowerCase() === 'force-rollback') {
+                        showAlert(`Transaction Aborted & Rolled Back: ${result}`, "danger");
+                    } else {
+                        showAlert(`Operation Failed: ${result}`, "danger");
+                    }
+                    refreshData(); // Refresh anyway to verify database was NOT mutated
+                }
+            } catch (err) {
+                showAlert("Network error occurred", "danger");
+            }
+        }
+
+        async function toggleComplete(id, title, description, completed) {
+            try {
+                const response = await fetch(`/api/todos/${id}`, {
+                    method: 'PUT',
+                    headers: getHeaders(),
+                    body: JSON.stringify({ title, description, completed })
+                });
+
+                if (response.status === 403 || response.status === 401) {
+                    showAlert("Access Denied: You do not have permission to modify tasks.", 'danger');
+                    return;
+                }
+
+                if (response.ok) {
+                    showAlert("Status updated!", "success");
+                    refreshData();
+                } else {
+                    const text = await response.text();
+                    showAlert("Update failed: " + text, "danger");
+                }
+            } catch (err) {
+                showAlert("Network error", "danger");
+            }
+        }
+
+        async function deleteTodo(id) {
+            if (confirm("Delete this task?")) {
+                try {
+                    const response = await fetch(`/api/todos/${id}`, {
+                        method: 'DELETE',
+                        headers: getHeaders()
+                    });
+
+                    if (response.status === 403 || response.status === 401) {
+                        showAlert("Access Denied: Admin role is required to delete tasks.", 'danger');
+                        return;
+                    }
+
+                    if (response.ok) {
+                        showAlert("Task deleted!", "success");
+                        refreshData();
+                    } else {
+                        showAlert("Delete failed", "danger");
+                    }
+                } catch (err) {
+                    showAlert("Network error", "danger");
+                }
+            }
+        }
+
+        async function clearLogs() {
+            if (confirm("Are you sure you want to clear all mutation logs?")) {
+                try {
+                    const response = await fetch('/api/logs/clear', {
+                        method: 'POST',
+                        headers: getHeaders()
+                    });
+
+                    if (response.status === 403 || response.status === 401) {
+                        showAlert("Access Denied: Admin role required to clear logs.", 'danger');
+                        return;
+                    }
+
+                    if (response.ok) {
+                        showAlert("Logs cleared!", "success");
+                        refreshData();
+                    } else {
+                        showAlert("Failed to clear logs", "danger");
+                    }
+                } catch (err) {
+                    showAlert("Network error", "danger");
+                }
+            }
+        }
+
+        function editTodo(id, title, description, completed) {
+            document.getElementById('todoId').value = id;
+            document.getElementById('title').value = title;
+            document.getElementById('description').value = description;
+            document.getElementById('completed').checked = completed;
+            
+            document.getElementById('submitBtn').innerText = "Update Task";
+            document.getElementById('cancelBtn').style.display = "inline-block";
+        }
+
+        function resetForm() {
+            document.getElementById('todoId').value = '';
+            document.getElementById('title').value = '';
+            document.getElementById('description').value = '';
+            document.getElementById('completed').checked = false;
+            
+            document.getElementById('submitBtn').innerText = "Create Task";
+            document.getElementById('cancelBtn').style.display = "none";
+        }
+
+        // Helpers
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function escapeQuote(str) {
+            if (!str) return '';
+            return str.replace(/'/g, "\\'");
+        }
+
+        function formatDate(dtStr) {
+            if (!dtStr) return '';
+            // Handle ISO string formatting
+            const date = new Date(dtStr);
+            return date.toLocaleString();
+        }
+
+        function formatTime(dtStr) {
+            if (!dtStr) return '';
+            const date = new Date(dtStr);
+            return date.toTimeString().split(' ')[0];
+        }
+    </script>
+</body>
+</html>

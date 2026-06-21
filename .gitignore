@@ -1,0 +1,31 @@
+# Python
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Java (Maven)
+target/
+*.class
+*.jar
+*.war
+*.ear
+
+# IDEs and Editors
+.idea/
+*.iml
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+Thumbs.db
+db.db
+desktop.ini
+.DS_Store
