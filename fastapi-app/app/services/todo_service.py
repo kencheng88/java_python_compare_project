@@ -1,8 +1,7 @@
 from sqlalchemy.orm import Session
 from app.models.todo import Todo
 from app.models.todo_log import TodoLog
-from app.repositories.todo_repository import TodoRepository
-from app.repositories.todo_log_repository import TodoLogRepository
+from app.repositories import TodoRepository, TodoLogRepository
 from app.exceptions import TodoTransactionError, TodoNotFoundError
 
 class TodoService:

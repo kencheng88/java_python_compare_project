@@ -6,8 +6,7 @@ from fastapi.openapi.utils import get_openapi
 
 from app.database import engine
 from app.models import Base
-from app.controllers import api_controller, debug_controller, web_controller
-from app.controllers.debug_controller import register_mcp_openapi
+from app.controllers import web_router, api_router, debug_router, register_mcp_openapi
 from app.exceptions import register_exception_handlers
 
 @asynccontextmanager
@@ -38,9 +37,9 @@ app = FastAPI(
 
 # Register routers (controllers)
 # Matches Spring Boot Router/Controller mapping annotations
-app.include_router(web_controller.router)
-app.include_router(api_controller.router)
-app.include_router(debug_controller.router)
+app.include_router(web_router)
+app.include_router(api_router)
+app.include_router(debug_router)
 
 # Mount static files (stylesheets, images, frontend client scripts)
 # Equivalent to Spring Boot's resource handler registry for /static/**
